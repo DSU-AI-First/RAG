@@ -2,3 +2,8 @@ fastapi
 uvicorn[standard]
 docling
 python-multipart
+pinecone
+pinecone-text
+requests
+pymongo[srv]
+python-dotenv
