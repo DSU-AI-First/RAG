@@ -22,10 +22,6 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-# Local extraction samples and output
-/backend-fastapi/sample/
-/backend-fastapi/sample_extracted/
-
 # Build artifacts
 build/
 dist/
