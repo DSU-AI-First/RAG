@@ -5,5 +5,6 @@ python-multipart
 pinecone
 pinecone-text
 requests
+openai
 pymongo[srv]
 python-dotenv

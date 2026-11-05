@@ -70,7 +70,7 @@ def chunker(md: str, source: str = "") -> list[dict]:
         parts = split_long(text)
         for j, part in enumerate(parts, 1):
             chunks.append({
-                "chunk_id": f"{doc_id}:{'p' + str(para) if para else 's' + str(i)}:{j}",
+                "chunk_id": f"{doc_id}_{len(chunks)}",
                 "doc_id": doc_id, "source": source, "title": title, "citation": citation,
                 "section": sec, "para": para, "part": j, "total_parts": len(parts),
                 "word_count": len(part.split()), "text": part,

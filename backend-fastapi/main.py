@@ -4,11 +4,13 @@ from tempfile import TemporaryDirectory
 from fastapi import FastAPI
 from fastapi import File, HTTPException, UploadFile
 from docling.document_converter import DocumentConverter
+from routers.chat_response import router as chat_router
 from routers.chunking_api import router as chunking_router
 from routers.ingest_api import router as ingest_router
 
 
 app = FastAPI()
+app.include_router(chat_router)
 app.include_router(chunking_router)
 app.include_router(ingest_router)
 converter = DocumentConverter()

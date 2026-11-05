@@ -12,7 +12,7 @@ EMBEDDING_BATCH_SIZE = 2
 UPSERT_BATCH_SIZE = 100
 
 
-def _embed_batch(texts: list[str]) -> list[list[float]]:
+def _embed_batch(texts: list[str], input_type: str = "passage") -> list[list[float]]:
     for attempt in range(3):
         response = requests.post(
             EMBEDDING_URL,
@@ -20,7 +20,7 @@ def _embed_batch(texts: list[str]) -> list[list[float]]:
             json={
                 "model": EMBEDDING_MODEL,
                 "input": texts,
-                "input_type": "passage",
+                "input_type": input_type,
                 "encoding_format": "float",
             },
             timeout=60,
@@ -39,6 +39,12 @@ def _embed_batch(texts: list[str]) -> list[list[float]]:
     if len(data) != len(texts):
         raise RuntimeError("Embedding service returned an unexpected number of vectors")
     return [item["embedding"] for item in data]
+
+
+def embed_query(text: str) -> tuple[dict, list[float]]:
+    sparse_vector = BM25Encoder().default().encode_queries(text)
+    dense_vector = _embed_batch([text], input_type="query")[0]
+    return sparse_vector, dense_vector
 
 
 def embed(chunks: list[dict]) -> tuple[list[dict], list[list[float]]]:
