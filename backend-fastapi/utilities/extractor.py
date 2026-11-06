@@ -1,9 +1,13 @@
+from functools import lru_cache
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from docling.document_converter import DocumentConverter
 
-converter = DocumentConverter()
+@lru_cache(maxsize=1)
+def _get_converter():
+    from docling.document_converter import DocumentConverter
+
+    return DocumentConverter()
 
 
 def extractor(pdf_content: bytes) -> str:
@@ -13,6 +17,6 @@ def extractor(pdf_content: bytes) -> str:
     with TemporaryDirectory() as temp_dir:
         pdf_path = Path(temp_dir) / "upload.pdf"
         pdf_path.write_bytes(pdf_content)
-        document = converter.convert(pdf_path).document
+        document = _get_converter().convert(pdf_path).document
 
     return document.export_to_markdown()
