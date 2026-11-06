@@ -41,7 +41,11 @@ export default function UploadPage() {
     formData.append("file", file);
     setBusy(true);
     try {
-      const response = await fetch("/api/ingest", { method: "POST", body: formData });
+      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://127.0.0.1:8000";
+      const response = await fetch(`${backendUrl.replace(/\/$/, "")}/ingest`, {
+        method: "POST",
+        body: formData,
+      });
       if (!response.ok) throw new Error(await getErrorMessage(response));
       const data: IngestResponse = await response.json();
       setMessage(`Added ${data.count} chunks · ${data.doc_id}`);

@@ -51,7 +51,11 @@ export default function Home() {
     try {
       const params = new URLSearchParams({ query: text });
       if (chatid) params.set("chatid", chatid);
-      const response = await fetch(`/api/chat-response?${params}`, { method: "POST" });
+      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://127.0.0.1:8000";
+      const response = await fetch(
+        `${backendUrl.replace(/\/$/, "")}/chat-response?${params}`,
+        { method: "POST" },
+      );
       if (!response.ok) {
         throw new Error(await getErrorMessage(response, "Could not get a response"));
       }

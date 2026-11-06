@@ -7,5 +7,6 @@ npm install
 npm run dev
 ```
 
-Set `BACKEND_URL` if the backend is hosted elsewhere. The Next.js rewrite proxies
-`/api/*` requests to FastAPI.
+Set `NEXT_PUBLIC_BACKEND_URL` to the FastAPI base URL for browser uploads and
+chat requests. Set the backend's `FRONTEND_ORIGINS` to comma-separated
+frontend origins (without trailing slashes) allowed to call the API.

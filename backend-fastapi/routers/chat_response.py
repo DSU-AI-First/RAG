@@ -18,7 +18,7 @@ def chatresponse(query: str, chatid: str | None = None):
     elif not chat_exists(chatid):
         raise HTTPException(status_code=404, detail="Chat not found")
 
-    sparse_vector, dense_vector = embed(query)
+    sparse_vector, dense_vector = embed_query(query)
     context = vector_search(sparse_vector, dense_vector)
     answer, source_ids = getLLMResponse(query, context)
     matches = {match.id: match for match in context}
@@ -40,10 +40,6 @@ def chatresponse(query: str, chatid: str | None = None):
             for source_id in source_ids
         ],
     }
-
-
-def embed(text: str):
-    return embed_query(text)
 
 
 def vector_search(sparse_vector: dict, dense_vector: list[float]):
