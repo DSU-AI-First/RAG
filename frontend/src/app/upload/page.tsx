@@ -4,8 +4,20 @@ import { FormEvent, useRef, useState } from "react";
 import Header from "@/components/header";
 
 type IngestResponse = {
-  count: number;
-  doc_id: string;
+  jobs: {
+    document_id: string;
+    task_id: string;
+    status: "QUEUED";
+  }[];
+};
+
+type IngestionStatus = {
+  document_id: string;
+  task_id: string;
+  status: "QUEUED" | "EXTRACTING_TEXT" | "CHUNKING" | "EMBEDDING_AND_UPSERTING" | "COMPLETED" | "FAILED";
+  chunk_count: number | null;
+  attempt_count: number;
+  error: string | null;
 };
 
 async function getErrorMessage(response: Response) {
@@ -19,26 +31,29 @@ async function getErrorMessage(response: Response) {
 
 export default function UploadPage() {
   const fileInput = useRef<HTMLInputElement>(null);
-  const [fileName, setFileName] = useState("");
+  const [files, setFiles] = useState<File[]>([]);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState(false);
+  const [jobs, setJobs] = useState<IngestionStatus[]>([]);
+  const [checkingStatus, setCheckingStatus] = useState(false);
 
   async function uploadPdf(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const file = fileInput.current?.files?.[0];
-    if (!file || busy) return;
+    if (!files.length || busy) return;
 
     setMessage("");
     setError(false);
-    if (file.size > 15 * 1024 * 1024) {
-      setMessage("PDF must be 15 MB or smaller.");
+    setJobs([]);
+    const oversized = files.find((file) => file.size > 15 * 1024 * 1024);
+    if (oversized) {
+      setMessage(`${oversized.name} exceeds the 15 MB limit.`);
       setError(true);
       return;
     }
 
     const formData = new FormData();
-    formData.append("file", file);
+    files.forEach((file) => formData.append("files", file));
     setBusy(true);
     try {
       const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://127.0.0.1:8000";
@@ -48,14 +63,37 @@ export default function UploadPage() {
       });
       if (!response.ok) throw new Error(await getErrorMessage(response));
       const data: IngestResponse = await response.json();
-      setMessage(`Added ${data.count} chunks · ${data.doc_id}`);
+      setJobs(data.jobs.map((job) => ({ ...job, chunk_count: null, attempt_count: 0, error: null })));
+      setMessage(`${data.jobs.length} PDF(s) uploaded and queued (202 Accepted).`);
       if (fileInput.current) fileInput.current.value = "";
-      setFileName("");
+      setFiles([]);
     } catch (uploadError) {
       setMessage(uploadError instanceof Error ? uploadError.message : "Could not reach the ingest service");
       setError(true);
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function checkStatuses() {
+    if (!jobs.length || checkingStatus) return;
+    setCheckingStatus(true);
+    setError(false);
+    try {
+      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://127.0.0.1:8000";
+      const updatedJobs = await Promise.all(jobs.map(async (job) => {
+        const response = await fetch(
+          `${backendUrl.replace(/\/$/, "")}/ingest/status/${encodeURIComponent(job.document_id)}`,
+        );
+        if (!response.ok) throw new Error(await getErrorMessage(response));
+        return response.json() as Promise<IngestionStatus>;
+      }));
+      setJobs(updatedJobs);
+    } catch (statusError) {
+      setMessage(statusError instanceof Error ? statusError.message : "Could not check ingestion status");
+      setError(true);
+    } finally {
+      setCheckingStatus(false);
     }
   }
 
@@ -70,16 +108,17 @@ export default function UploadPage() {
           <form onSubmit={uploadPdf}>
             <label className="file-picker">
               <span aria-hidden="true">＋</span>
-              <span>{fileName || "Choose a PDF"}</span>
+              <span>{files.length ? `${files.length} PDF(s) selected` : "Choose PDF(s)"}</span>
               <input
                 ref={fileInput}
                 type="file"
                 accept="application/pdf,.pdf"
-                onChange={(event) => setFileName(event.target.files?.[0]?.name ?? "")}
+                multiple
+                onChange={(event) => setFiles(Array.from(event.target.files ?? []))}
               />
             </label>
-            <button className="upload-button" type="submit" disabled={busy || !fileName}>
-              {busy ? "Indexing PDF…" : "Upload and index"}
+            <button className="upload-button" type="submit" disabled={busy || !files.length}>
+              {busy ? "Uploading PDFs…" : "Upload and index"}
             </button>
           </form>
           {message && (
@@ -88,6 +127,25 @@ export default function UploadPage() {
             </p>
           )}
           {busy && <p className="upload-note">This can take a few minutes for a large document.</p>}
+          {jobs.length > 0 && (
+            <div className="upload-job" aria-live="polite">
+              {jobs.map((job) => (
+                <p className={`upload-message${job.error ? " error" : ""}`} key={job.document_id}>
+                  {job.document_id.slice(0, 8)} · {job.status.replaceAll("_", " ")}
+                  {job.chunk_count !== null && ` · ${job.chunk_count} chunks`}
+                  {job.error && ` · ${job.error}`}
+                </p>
+              ))}
+              <button
+                className="upload-button"
+                type="button"
+                onClick={checkStatuses}
+                disabled={checkingStatus}
+              >
+                {checkingStatus ? "Checking…" : "Check statuses"}
+              </button>
+            </div>
+          )}
         </div>
       </section>
     </main>
