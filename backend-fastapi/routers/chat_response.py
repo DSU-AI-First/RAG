@@ -49,6 +49,7 @@ def vector_search(sparse_vector: dict, dense_vector: list[float]):
         sparse_vector=sparse_vector,
         top_k=5,
         include_metadata=True,
+        namespace="rag-security-testing" if os.getenv("TESTING") == "true" else "",
     ).matches
 
 

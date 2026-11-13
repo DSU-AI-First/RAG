@@ -78,7 +78,10 @@ def upsert(chunks: list[dict], sparse_vectors: list[dict], dense_vectors: list[l
 
     index = Pinecone(api_key=os.environ["PINECONE_API_KEY"]).Index(INDEX_NAME)
     for start in range(0, len(vectors), UPSERT_BATCH_SIZE):
-        index.upsert(vectors=vectors[start : start + UPSERT_BATCH_SIZE])
+        index.upsert(
+            vectors=vectors[start : start + UPSERT_BATCH_SIZE],
+            namespace="rag-security-testing" if os.getenv("TESTING") == "true" else "",
+        )
 
 
 def embed_and_upsert(chunks: list[dict]) -> None:
