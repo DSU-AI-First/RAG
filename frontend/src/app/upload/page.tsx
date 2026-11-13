@@ -3,6 +3,8 @@
 import { FormEvent, useRef, useState } from "react";
 import Header from "@/components/header";
 
+type Role = "student" | "faculty" | "admin";
+
 type IngestResponse = {
   jobs: {
     document_id: string;
@@ -32,6 +34,7 @@ async function getErrorMessage(response: Response) {
 export default function UploadPage() {
   const fileInput = useRef<HTMLInputElement>(null);
   const [files, setFiles] = useState<File[]>([]);
+  const [roles, setRoles] = useState<Role[]>(["student"]);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState(false);
@@ -40,7 +43,7 @@ export default function UploadPage() {
 
   async function uploadPdf(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!files.length || busy) return;
+    if (!files.length || !roles.length || busy) return;
 
     setMessage("");
     setError(false);
@@ -54,6 +57,7 @@ export default function UploadPage() {
 
     const formData = new FormData();
     files.forEach((file) => formData.append("files", file));
+    roles.forEach((role) => formData.append("roles", role));
     setBusy(true);
     try {
       const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://127.0.0.1:8000";
@@ -117,7 +121,28 @@ export default function UploadPage() {
                 onChange={(event) => setFiles(Array.from(event.target.files ?? []))}
               />
             </label>
-            <button className="upload-button" type="submit" disabled={busy || !files.length}>
+            <fieldset className="role-picker role-options">
+              <legend>Available to</legend>
+              {(["student", "faculty", "admin"] as const).map((role) => (
+                <label key={role}>
+                  <input
+                    type="checkbox"
+                    checked={roles.includes(role)}
+                    onChange={() => setRoles((current) => (
+                      current.includes(role)
+                        ? current.filter((selected) => selected !== role)
+                        : [...current, role]
+                    ))}
+                  />
+                  {role[0].toUpperCase() + role.slice(1)}
+                </label>
+              ))}
+            </fieldset>
+            <button
+              className="upload-button"
+              type="submit"
+              disabled={busy || !files.length || !roles.length}
+            >
               {busy ? "Uploading PDFs…" : "Upload and index"}
             </button>
           </form>

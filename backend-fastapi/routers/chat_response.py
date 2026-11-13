@@ -1,25 +1,30 @@
 import json
 import os
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Header, HTTPException
 from openai import OpenAI
 from pinecone import Pinecone
 
 from database.chat_store import chat_exists, new_chatid, save_exchange
+from schemas.ingestion import ChatRole
 from utilities.embed_upsert import INDEX_NAME, embed_query
 
 router = APIRouter(tags=["chat"])
 
 
 @router.post("/chat-response")
-def chatresponse(query: str, chatid: str | None = None):
+def chatresponse(
+    query: str,
+    chatid: str | None = None,
+    role: ChatRole = Header(alias="X-User-Role"),
+):
     if chatid is None:
         chatid = new_chatid()
     elif not chat_exists(chatid):
         raise HTTPException(status_code=404, detail="Chat not found")
 
     sparse_vector, dense_vector = embed_query(query)
-    context = vector_search(sparse_vector, dense_vector)
+    context = vector_search(sparse_vector, dense_vector, role)
     answer, source_ids = getLLMResponse(query, context)
     matches = {match.id: match for match in context}
     if any(source_id not in matches for source_id in source_ids):
@@ -42,7 +47,7 @@ def chatresponse(query: str, chatid: str | None = None):
     }
 
 
-def vector_search(sparse_vector: dict, dense_vector: list[float]):
+def vector_search(sparse_vector: dict, dense_vector: list[float], role: ChatRole):
     index = Pinecone(api_key=os.environ["PINECONE_API_KEY"]).Index(INDEX_NAME)
     return index.query(
         vector=dense_vector,
@@ -50,6 +55,7 @@ def vector_search(sparse_vector: dict, dense_vector: list[float]):
         top_k=5,
         include_metadata=True,
         namespace="rag-security-testing" if os.getenv("TESTING") == "true" else "",
+        filter={"roles": {"$in": [role]}} if role != "default" else None,
     ).matches
 
 

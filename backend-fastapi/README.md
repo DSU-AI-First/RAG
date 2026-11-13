@@ -7,6 +7,9 @@ the project `.env`. Set `FRONTEND_ORIGINS` to comma-separated frontend origins
 without trailing slashes (for example, `https://your-app.vercel.app`).
 PDF uploads are limited to 15 MB to fit MongoDB's BSON document size limit.
 
+Uploads can be tagged for multiple roles in MongoDB and Pinecone. Chat retrieval
+filters by the selected role; `default` searches across all roles.
+
 PDF ingestion runs in a Celery worker. Set `RABBITMQ_URL` for the API and
 worker, then start the worker from this directory with
 `celery -A celery_app:celery_app worker --loglevel=info`.

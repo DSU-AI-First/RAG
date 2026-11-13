@@ -223,6 +223,49 @@ button {
   clip-path: inset(50%);
 }
 
+.role-picker {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin: 0 0 9px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.role-picker select {
+  min-width: 130px;
+  height: 34px;
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--paper);
+  color: var(--ink);
+  font: inherit;
+}
+
+.role-options {
+  display: flex;
+  flex-wrap: wrap;
+  border: 0;
+  padding: 0;
+}
+
+.role-options legend {
+  width: 100%;
+  margin-bottom: 8px;
+}
+
+.role-options label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.role-options input {
+  margin: 0;
+  accent-color: var(--green);
+}
+
 .upload-button {
   width: 100%;
   height: 39px;

@@ -31,6 +31,7 @@ def process_pdf_ingestion(self, document_id: str):
         set_status("CHUNKING", chunk_count=len(chunks))
         for index, chunk in enumerate(chunks):
             chunk["chunk_id"] = f"{document_id}_chunk_{index}"
+            chunk["roles"] = document["roles"]
 
         set_status("EMBEDDING_AND_UPSERTING")
         embed_and_upsert(chunks)

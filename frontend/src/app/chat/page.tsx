@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import Header from "@/components/header";
 
 type Source = {
@@ -37,6 +37,19 @@ export default function Home() {
   const [query, setQuery] = useState("");
   const [chatBusy, setChatBusy] = useState(false);
   const [chatError, setChatError] = useState("");
+  const roleSelect = useRef<HTMLSelectElement>(null);
+
+  useEffect(() => {
+    const savedRole = localStorage.getItem("userRole");
+    if (
+      savedRole === "default" ||
+      savedRole === "student" ||
+      savedRole === "faculty" ||
+      savedRole === "admin"
+    ) {
+      if (roleSelect.current) roleSelect.current.value = savedRole;
+    }
+  }, []);
 
   async function sendMessage(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -54,7 +67,7 @@ export default function Home() {
       const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://127.0.0.1:8000";
       const response = await fetch(
         `${backendUrl.replace(/\/$/, "")}/chat-response?${params}`,
-        { method: "POST" },
+        { method: "POST", headers: { "X-User-Role": roleSelect.current?.value ?? "default" } },
       );
       if (!response.ok) {
         throw new Error(await getErrorMessage(response, "Could not get a response"));
@@ -125,6 +138,21 @@ export default function Home() {
           </div>
 
           <form className="composer" onSubmit={sendMessage}>
+            <label className="role-picker">
+              <span>Chat as</span>
+              <select
+                ref={roleSelect}
+                defaultValue="default"
+                onChange={(event) => {
+                  localStorage.setItem("userRole", event.target.value);
+                }}
+              >
+                <option value="default">Default (all documents)</option>
+                <option value="student">Student</option>
+                <option value="faculty">Faculty</option>
+                <option value="admin">Admin</option>
+              </select>
+            </label>
             <label className="sr-only" htmlFor="query">Ask a question</label>
             <textarea
               id="query"
