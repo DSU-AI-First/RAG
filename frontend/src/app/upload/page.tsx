@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useRef, useState } from "react";
+import { FormEvent, useRef, useState } from "react";
 import Header from "@/components/header";
 
 type IngestResponse = {
@@ -16,7 +16,6 @@ type IngestionStatus = {
   task_id: string;
   status: "QUEUED" | "EXTRACTING_TEXT" | "CHUNKING" | "EMBEDDING_AND_UPSERTING" | "COMPLETED" | "FAILED";
   chunk_count: number | null;
-  upserted_chunks: number;
   attempt_count: number;
   error: string | null;
 };
@@ -38,24 +37,6 @@ export default function UploadPage() {
   const [error, setError] = useState(false);
   const [jobs, setJobs] = useState<IngestionStatus[]>([]);
   const [checkingStatus, setCheckingStatus] = useState(false);
-  const [retrying, setRetrying] = useState(false);
-
-  useEffect(() => {
-    async function loadJobs() {
-      try {
-        const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://127.0.0.1:8000";
-        const response = await fetch(`${backendUrl.replace(/\/$/, "")}/ingest/jobs`);
-        if (!response.ok) throw new Error(await getErrorMessage(response));
-        const data: { jobs: IngestionStatus[] } = await response.json();
-        setJobs(data.jobs);
-      } catch (loadError) {
-        setMessage(loadError instanceof Error ? loadError.message : "Could not load ingestion jobs");
-        setError(true);
-      }
-    }
-
-    void loadJobs();
-  }, []);
 
   async function uploadPdf(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -82,13 +63,7 @@ export default function UploadPage() {
       });
       if (!response.ok) throw new Error(await getErrorMessage(response));
       const data: IngestResponse = await response.json();
-      setJobs(data.jobs.map((job) => ({
-        ...job,
-        chunk_count: null,
-        upserted_chunks: 0,
-        attempt_count: 0,
-        error: null,
-      })));
+      setJobs(data.jobs.map((job) => ({ ...job, chunk_count: null, attempt_count: 0, error: null })));
       setMessage(`${data.jobs.length} PDF(s) uploaded and queued (202 Accepted).`);
       if (fileInput.current) fileInput.current.value = "";
       setFiles([]);
@@ -101,7 +76,7 @@ export default function UploadPage() {
   }
 
   async function checkStatuses() {
-    if (!jobs.length || checkingStatus || retrying) return;
+    if (!jobs.length || checkingStatus) return;
     setCheckingStatus(true);
     setError(false);
     try {
@@ -119,63 +94,6 @@ export default function UploadPage() {
       setError(true);
     } finally {
       setCheckingStatus(false);
-    }
-  }
-
-  function mergeJobs(updatedJobs: IngestionStatus[]) {
-    setJobs((current) => {
-      const byId = new Map(current.map((job) => [job.document_id, job]));
-      updatedJobs.forEach((job) => byId.set(job.document_id, job));
-      return Array.from(byId.values());
-    });
-  }
-
-  async function retryJob(documentId: string) {
-    if (retrying || checkingStatus) return;
-    setRetrying(true);
-    setMessage("");
-    setError(false);
-    try {
-      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://127.0.0.1:8000";
-      const response = await fetch(
-        `${backendUrl.replace(/\/$/, "")}/ingest/retry/${encodeURIComponent(documentId)}`,
-        { method: "POST" },
-      );
-      if (!response.ok) throw new Error(await getErrorMessage(response));
-      mergeJobs([await response.json()]);
-      setMessage("Ingestion retry queued.");
-    } catch (retryError) {
-      setMessage(retryError instanceof Error ? retryError.message : "Could not retry ingestion");
-      setError(true);
-    } finally {
-      setRetrying(false);
-    }
-  }
-
-  async function retryAllFailed() {
-    if (retrying || checkingStatus) return;
-    setRetrying(true);
-    setMessage("");
-    setError(false);
-    try {
-      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://127.0.0.1:8000";
-      const response = await fetch(`${backendUrl.replace(/\/$/, "")}/ingest/retry-failed`, {
-        method: "POST",
-      });
-      if (!response.ok) throw new Error(await getErrorMessage(response));
-      const result: { jobs: IngestionStatus[]; errors: { document_id: string; error: string }[] } =
-        await response.json();
-      mergeJobs(result.jobs);
-      setMessage(
-        `Queued ${result.jobs.length} failed job(s) for retry.` +
-          (result.errors.length ? ` ${result.errors.length} could not be queued.` : ""),
-      );
-      setError(result.errors.length > 0);
-    } catch (retryError) {
-      setMessage(retryError instanceof Error ? retryError.message : "Could not retry failed jobs");
-      setError(true);
-    } finally {
-      setRetrying(false);
     }
   }
 
@@ -208,49 +126,26 @@ export default function UploadPage() {
               {message}
             </p>
           )}
-          {jobs.some((job) => job.status === "FAILED") && (
-            <button
-              className="upload-button"
-              type="button"
-              onClick={retryAllFailed}
-              disabled={retrying || checkingStatus}
-            >
-              {retrying ? "Queueing retries…" : "Retry all failed"}
-            </button>
-          )}
           {busy && <p className="upload-note">This can take a few minutes for a large document.</p>}
           {jobs.length > 0 && (
             <div className="upload-job" aria-live="polite">
               {jobs.map((job) => (
-                <div key={job.document_id}>
-                  <p className={`upload-message${job.error ? " error" : ""}`}>
-                    {job.document_id.slice(0, 8)} · {job.status.replaceAll("_", " ")}
-                    {job.chunk_count !== null && ` · ${job.upserted_chunks}/${job.chunk_count} chunks upserted`}
-                    {job.error && ` · ${job.error}`}
-                  </p>
-                  {job.status === "FAILED" && (
-                    <button
-                      className="upload-button"
-                      type="button"
-                      onClick={() => retryJob(job.document_id)}
-                      disabled={retrying || checkingStatus}
-                    >
-                      Retry this document
-                    </button>
-                  )}
-                </div>
+                <p className={`upload-message${job.error ? " error" : ""}`} key={job.document_id}>
+                  {job.document_id.slice(0, 8)} · {job.status.replaceAll("_", " ")}
+                  {job.chunk_count !== null && ` · ${job.chunk_count} chunks`}
+                  {job.error && ` · ${job.error}`}
+                </p>
               ))}
               <button
                 className="upload-button"
                 type="button"
                 onClick={checkStatuses}
-                disabled={checkingStatus || retrying}
+                disabled={checkingStatus}
               >
                 {checkingStatus ? "Checking…" : "Check statuses"}
               </button>
             </div>
           )}
-          {!jobs.length && <p className="upload-note">No recent uploads.</p>}
         </div>
       </section>
     </main>
