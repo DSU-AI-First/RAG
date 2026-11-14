@@ -8,8 +8,17 @@ from pinecone import Pinecone
 from database.chat_store import chat_exists, new_chatid, save_exchange
 from schemas.ingestion import ChatRole
 from utilities.embed_upsert import INDEX_NAME, embed_query
+from utilities.safety import check_query_safety, check_response_safety
 
 router = APIRouter(tags=["chat"])
+QUERY_REFUSAL = (
+    "I'm sorry, but I can't help with that request. "
+    "I can still help with a neutral summary of the relevant judgment."
+)
+SAFETY_REFUSAL = (
+    "I'm sorry, but I can't provide that response. "
+    "I can still help with a neutral summary of the relevant judgment."
+)
 
 
 @router.post("/chat-response")
@@ -23,9 +32,16 @@ def chatresponse(
     elif not chat_exists(chatid):
         raise HTTPException(status_code=404, detail="Chat not found")
 
-    sparse_vector, dense_vector = embed_query(query)
-    context = vector_search(sparse_vector, dense_vector, role)
-    answer, source_ids = getLLMResponse(query, context)
+    context = []
+    if check_query_safety(query):
+        sparse_vector, dense_vector = embed_query(query)
+        context = vector_search(sparse_vector, dense_vector, role)
+        answer, source_ids = getLLMResponse(query, context)
+        if not check_response_safety(query, answer):
+            answer, source_ids = SAFETY_REFUSAL, []
+    else:
+        answer, source_ids = QUERY_REFUSAL, []
+
     matches = {match.id: match for match in context}
     if any(source_id not in matches for source_id in source_ids):
         raise HTTPException(status_code=502, detail="The model cited a chunk that was not retrieved")

@@ -7,6 +7,13 @@ the project `.env`. Set `FRONTEND_ORIGINS` to comma-separated frontend origins
 without trailing slashes (for example, `https://your-app.vercel.app`).
 PDF uploads are limited to 15 MB to fit MongoDB's BSON document size limit.
 
+Queries are screened before embedding, and generated answers are screened
+before they are returned or saved, using separate Nemotron Safety Guard checks.
+Neutral discussion of crimes or violence in legal judgments is allowed. Both
+checks use `NVIDIA_API_KEY`; optionally set `NEMOTRON_QUERY_SAFETY_MODEL` or
+`NEMOTRON_RESPONSE_SAFETY_MODEL` to configure their models independently. If
+safety screening is unavailable or returns an invalid result, the request fails.
+
 Uploads can be tagged for multiple roles in MongoDB and Pinecone. Chat retrieval
 filters by the selected role; `default` searches across all roles.
 
