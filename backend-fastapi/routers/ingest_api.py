@@ -66,7 +66,15 @@ def ingest(files: list[UploadFile] = File(...), roles: list[Role] = Form(...)):
 def ingestion_status(document_id: str):
     job = get_collection("ingestion_jobs").find_one(
         {"_id": document_id},
-        {"_id": 1, "task_id": 1, "status": 1, "chunk_count": 1, "attempt_count": 1, "error": 1},
+        {
+            "_id": 1,
+            "task_id": 1,
+            "status": 1,
+            "chunk_count": 1,
+            "attempt_count": 1,
+            "error": 1,
+            "safety_assessment": 1,
+        },
     )
     if job is None:
         raise HTTPException(status_code=404, detail="Ingestion job not found")

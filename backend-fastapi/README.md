@@ -7,6 +7,13 @@ the project `.env`. Set `FRONTEND_ORIGINS` to comma-separated frontend origins
 without trailing slashes (for example, `https://your-app.vercel.app`).
 PDF uploads are limited to 15 MB to fit MongoDB's BSON document size limit.
 
+After extraction, a Nemotron model assesses text for prompt-injection attempts
+and records a `safe`, `unsafe`, or `check_for_review` flag on the ingestion job.
+Safe documents continue through ingestion; unsafe documents are discarded and
+their PDF is deleted; documents needing review are quarantined and not indexed.
+Read the flag and status from `/ingest/status/{document_id}`. Optionally set
+`NEMOTRON_DOCUMENT_SAFETY_MODEL` to choose the screening model.
+
 Queries are screened before embedding, and generated answers are screened
 before they are returned or saved, using separate Nemotron Safety Guard checks.
 Neutral discussion of crimes or violence in legal judgments is allowed. Both
@@ -20,3 +27,6 @@ filters by the selected role; `default` searches across all roles.
 PDF ingestion runs in a Celery worker. Set `RABBITMQ_URL` for the API and
 worker, then start the worker from this directory with
 `celery -A celery_app:celery_app worker --loglevel=info`.
+
+See [AI_SECURITY_README.md](AI_SECURITY_README.md) for the runtime guardrails
+and their limitations.

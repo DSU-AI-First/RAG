@@ -22,11 +22,15 @@ class IngestionJob(BaseModel):
     task_id: str
     status: Literal[
         "QUEUED",
+        "EXTRACTING_TEXT",
         "CHUNKING",
         "EMBEDDING_AND_UPSERTING",
         "COMPLETED",
+        "DISCARDED",
+        "QUARANTINED",
         "FAILED",
     ] = "QUEUED"
     chunk_count: Optional[int] = None
     attempt_count: int = 0
     error: Optional[str] = None
+    safety_assessment: Optional[dict[str, str]] = None

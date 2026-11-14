@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 from celery_app import celery_app
 from database.mongodb import get_collection
 from utilities.chunker import chunker
+from utilities.document_safety import assess_document_safety
 from utilities.embed_upsert import embed_and_upsert
 from utilities.extractor import extractor
 
@@ -12,6 +13,15 @@ def process_pdf_ingestion(self, document_id: str):
     jobs = None
     try:
         jobs = get_collection("ingestion_jobs")
+        job = jobs.find_one({"_id": document_id})
+        if job is None:
+            raise ValueError(f"Ingestion job not found: {document_id}")
+        if job.get("status") == "DISCARDED":
+            get_collection().delete_one({"_id": document_id})
+            return
+        if job.get("status") in {"COMPLETED", "QUARANTINED"}:
+            return
+
         pdfs = get_collection()
         document = pdfs.find_one({"_id": document_id})
         if document is None:
@@ -25,6 +35,21 @@ def process_pdf_ingestion(self, document_id: str):
 
         set_status("EXTRACTING_TEXT")
         markdown = extractor(bytes(document["pdf"]))
+        safety_assessment = job.get("safety_assessment")
+        if safety_assessment is None:
+            safety_assessment = assess_document_safety(markdown)
+            set_status("EXTRACTING_TEXT", safety_assessment=safety_assessment)
+
+        flag = safety_assessment.get("flag")
+        if flag == "unsafe":
+            set_status("DISCARDED", safety_assessment=safety_assessment)
+            pdfs.delete_one({"_id": document_id})
+            return
+        if flag == "check_for_review":
+            set_status("QUARANTINED", safety_assessment=safety_assessment)
+            return
+        if flag != "safe":
+            raise ValueError("Document safety screening returned an unknown flag")
 
         set_status("CHUNKING")
         chunks = chunker(markdown, document["filename"])
