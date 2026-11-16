@@ -3,7 +3,7 @@
 import Link from "next/link";
 
 type HeaderProps = {
-  active: "chat" | "upload";
+  active: "chat" | "upload" | "research" | "chunking";
   onNewChat?: () => void;
   chatBusy?: boolean;
 };
@@ -21,6 +21,12 @@ export default function Header({ active, onNewChat, chatBusy }: HeaderProps) {
         </Link>
         <Link className={`nav-link${active === "upload" ? " active" : ""}`} href="/upload">
           Upload PDF
+        </Link>
+        <Link className={`nav-link${active === "research" ? " active" : ""}`} href="/research">
+          Research Lab
+        </Link>
+        <Link className={`nav-link${active === "chunking" ? " active" : ""}`} href="/chunking">
+          Chunking Visualizer
         </Link>
         {onNewChat && (
           <button className="new-chat" type="button" onClick={onNewChat} disabled={chatBusy}>

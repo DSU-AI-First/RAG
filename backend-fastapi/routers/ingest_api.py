@@ -1,10 +1,11 @@
+from typing import Any
 from uuid import uuid4
 
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile, status
+from fastapi import APIRouter, File, Form, Header, HTTPException, Response, UploadFile, status
 
 from celery_app import celery_app
 from database.mongodb import get_collection
-from schemas.ingestion import IngestionJob, PDFDocument, Role
+from schemas.ingestion import ChatRole, IngestionJob, PDFDocument, Role
 from utilities.judgement_store import MAX_PDF_SIZE
 
 router = APIRouter(tags=["ingest"])
@@ -80,3 +81,27 @@ def ingestion_status(document_id: str):
         raise HTTPException(status_code=404, detail="Ingestion job not found")
     job["document_id"] = job.pop("_id")
     return job
+
+
+@router.get("/judgment-source/{chunk_id}")
+def judgment_source(chunk_id: str, role: ChatRole = Header(alias="X-User-Role")):
+    document_id, separator, chunk_index = chunk_id.rpartition("_chunk_")
+    if not separator or not document_id or not chunk_index.isdecimal():
+        raise HTTPException(status_code=404, detail="Source judgment not found")
+
+    document_query: dict[str, Any] = {"_id": document_id}
+    if role != "default":
+        document_query["roles"] = {"$in": [role]}
+
+    document = get_collection().find_one(document_query, {"pdf": 1})
+    if document is None or document.get("pdf") is None:
+        raise HTTPException(status_code=404, detail="Source judgment not found")
+
+    return Response(
+        content=bytes(document["pdf"]),
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": "inline",
+            "Cache-Control": "private, no-store",
+        },
+    )

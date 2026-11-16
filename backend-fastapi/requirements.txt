@@ -9,3 +9,4 @@ requests
 openai
 pymongo[srv]
 python-dotenv
+sentence-transformers

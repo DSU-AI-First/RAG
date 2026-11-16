@@ -7,6 +7,11 @@ the project `.env`. Set `FRONTEND_ORIGINS` to comma-separated frontend origins
 without trailing slashes (for example, `https://your-app.vercel.app`).
 PDF uploads are limited to 15 MB to fit MongoDB's BSON document size limit.
 
+The `/chunking` visualizer endpoints extract selectable text from PDFs and
+generate chunks in memory. They return source offsets for highlighting and do
+not use the ingestion, embedding, or vector database pipeline. Scanned PDFs
+without selectable text are not supported.
+
 After extraction, a Nemotron model assesses text for prompt-injection attempts
 and records a `safe`, `unsafe`, or `check_for_review` flag on the ingestion job.
 Safe documents continue through ingestion; unsafe documents are discarded and

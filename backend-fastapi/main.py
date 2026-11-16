@@ -6,7 +6,9 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from routers.chat_response import router as chat_router
 from routers.chunking_api import router as chunking_router
+from routers.chunking_visualizer_api import router as chunking_visualizer_router
 from routers.ingest_api import router as ingest_router
+from routers.retrieval_research import router as research_router
 
 load_dotenv()
 
@@ -27,7 +29,9 @@ app.add_middleware(
 )
 app.include_router(chat_router)
 app.include_router(chunking_router)
+app.include_router(chunking_visualizer_router)
 app.include_router(ingest_router)
+app.include_router(research_router)
 
 
 @app.get("/")
