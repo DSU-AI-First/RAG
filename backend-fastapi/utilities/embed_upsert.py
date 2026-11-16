@@ -47,6 +47,10 @@ def embed_query(text: str) -> tuple[dict, list[float]]:
     return sparse_vector, dense_vector
 
 
+def embed_dense_queries(texts: list[str]) -> list[list[float]]:
+    return _embed_batch(texts, input_type="query")
+
+
 def embed(chunks: list[dict]) -> tuple[list[dict], list[list[float]]]:
     texts = [chunk["embed_text"] for chunk in chunks]
     dense_vectors = _embed_batch(texts)

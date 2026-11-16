@@ -3,7 +3,7 @@
 import Link from "next/link";
 
 type HeaderProps = {
-  active: "chat" | "upload" | "research" | "chunking";
+  active: "chat" | "upload" | "research" | "chunking" | "embeddings";
   onNewChat?: () => void;
   chatBusy?: boolean;
 };
@@ -27,6 +27,9 @@ export default function Header({ active, onNewChat, chatBusy }: HeaderProps) {
         </Link>
         <Link className={`nav-link${active === "chunking" ? " active" : ""}`} href="/chunking">
           Chunking Visualizer
+        </Link>
+        <Link className={`nav-link${active === "embeddings" ? " active" : ""}`} href="/embeddings">
+          Embedding Simulator
         </Link>
         {onNewChat && (
           <button className="new-chat" type="button" onClick={onNewChat} disabled={chatBusy}>

@@ -12,6 +12,10 @@ generate chunks in memory. They return source offsets for highlighting and do
 not use the ingestion, embedding, or vector database pipeline. Scanned PDFs
 without selectable text are not supported.
 
+The `/embedding-simulate` endpoint embeds three sentences using the same NVIDIA
+embedding model and query configuration as retrieval. It returns full vectors
+and cosine similarities without querying or writing to Pinecone.
+
 After extraction, a Nemotron model assesses text for prompt-injection attempts
 and records a `safe`, `unsafe`, or `check_for_review` flag on the ingestion job.
 Safe documents continue through ingestion; unsafe documents are discarded and
