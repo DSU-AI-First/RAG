@@ -3,7 +3,7 @@
 import Link from "next/link";
 
 type HeaderProps = {
-  active: "chat" | "upload" | "research" | "chunking" | "embeddings";
+  active: "chat" | "upload" | "research" | "pipeline" | "chunking" | "embeddings";
   onNewChat?: () => void;
   chatBusy?: boolean;
 };
@@ -24,6 +24,9 @@ export default function Header({ active, onNewChat, chatBusy }: HeaderProps) {
         </Link>
         <Link className={`nav-link${active === "research" ? " active" : ""}`} href="/research">
           Research Lab
+        </Link>
+        <Link className={`nav-link${active === "pipeline" ? " active" : ""}`} href="/pipeline">
+          Pipeline Explorer
         </Link>
         <Link className={`nav-link${active === "chunking" ? " active" : ""}`} href="/chunking">
           Chunking Visualizer

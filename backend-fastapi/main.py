@@ -9,6 +9,7 @@ from routers.chunking_api import router as chunking_router
 from routers.chunking_visualizer_api import router as chunking_visualizer_router
 from routers.embedding_simulator import router as embedding_simulator_router
 from routers.ingest_api import router as ingest_router
+from routers.pipeline_explorer import router as pipeline_explorer_router
 from routers.retrieval_research import router as research_router
 
 load_dotenv()
@@ -34,6 +35,7 @@ app.include_router(chunking_visualizer_router)
 app.include_router(embedding_simulator_router)
 app.include_router(ingest_router)
 app.include_router(research_router)
+app.include_router(pipeline_explorer_router)
 
 
 @app.get("/")

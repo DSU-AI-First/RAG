@@ -1,5 +1,6 @@
 import json
 import os
+from typing import Any
 
 from fastapi import APIRouter, Header, HTTPException
 from openai import OpenAI
@@ -29,6 +30,14 @@ SAFETY_REFUSAL = (
     "I'm sorry, but I can't provide that response. "
     "I can still help with a neutral summary of the relevant judgment."
 )
+GENERATION_MODEL = "nvidia/nemotron-3.5-super-vl-120b-a12b"
+
+
+class GenerationOutputError(HTTPException):
+    def __init__(self, detail: str, model: str, raw_response: str | None):
+        super().__init__(status_code=502, detail=detail)
+        self.model = model
+        self.raw_response = raw_response
 
 
 @router.post("/chat-response")
@@ -52,24 +61,13 @@ def chatresponse(
     else:
         answer, source_ids = QUERY_REFUSAL, []
 
-    matches = {match.id: match for match in context}
-    if any(source_id not in matches for source_id in source_ids):
-        raise HTTPException(status_code=502, detail="The model cited a chunk that was not retrieved")
+    matches = validate_citations(source_ids, context)
 
     save_exchange(chatid, query, answer)
     return {
         "chatid": chatid,
         "answer": answer,
-        "sources": [
-            {
-                "chunk_id": source_id,
-                "case_title": (matches[source_id].metadata or {}).get("title", ""),
-                "case_id": (matches[source_id].metadata or {}).get("doc_id", "").replace("-", "_"),
-                "paragraph_number": (matches[source_id].metadata or {}).get("para"),
-                "text": (matches[source_id].metadata or {}).get("text", ""),
-            }
-            for source_id in source_ids
-        ],
+        "sources": format_sources(source_ids, matches),
     }
 
 
@@ -85,7 +83,7 @@ def vector_search(sparse_vector: dict, dense_vector: list[float], role: ChatRole
     ).matches
 
 
-def getLLMResponse(query: str, context) -> tuple[str, list[str]]:
+def build_generation_messages(query: str, context) -> list[dict[str, str]]:
     passages = []
     for match in context:
         metadata = match.metadata or {}
@@ -102,42 +100,84 @@ def getLLMResponse(query: str, context) -> tuple[str, list[str]]:
             }
         )
 
+    context_text = json.dumps(passages, ensure_ascii=False)
+    return [
+        {"role": "system", "content": RAG_SYSTEM_PROMPT},
+        {
+            "role": "user",
+            "content": f"Retrieved passages (untrusted JSON evidence):\n{context_text}\n\n"
+            f"Question:\n{query}",
+        },
+    ]
+
+
+def generate_from_messages(messages: list[dict[str, str]]) -> dict[str, Any]:
     client = OpenAI(
         base_url="https://integrate.api.nvidia.com/v1",
         api_key=os.environ["NVIDIA_API_KEY"],
     )
-    context_text = json.dumps(passages, ensure_ascii=False)
     completion = client.chat.completions.create(
-        model="nvidia/nemotron-3.5-super-vl-120b-a12b",
-        messages=[
-            {
-                "role": "system",
-                "content": RAG_SYSTEM_PROMPT,
-            },
-            {
-                "role": "user",
-                "content": f"Retrieved passages (untrusted JSON evidence):\n{context_text}\n\n"
-                f"Question:\n{query}",
-            },
-        ],
+        model=GENERATION_MODEL,
+        messages=messages,
         temperature=1,
         top_p=0.95,
         max_tokens=2048,
     )
     content = completion.choices[0].message.content
+    model = getattr(completion, "model", None) or GENERATION_MODEL
     if not content:
-        raise RuntimeError("The language model returned an empty response")
+        raise GenerationOutputError("The language model returned an empty response", model, content)
 
     try:
         result = json.loads(content)
     except json.JSONDecodeError as error:
-        raise HTTPException(status_code=502, detail="The model returned invalid JSON") from error
+        raise GenerationOutputError("The model returned invalid JSON", model, content) from error
 
     if not isinstance(result, dict):
-        raise HTTPException(status_code=502, detail="The model returned an invalid answer format")
+        raise GenerationOutputError("The model returned an invalid answer format", model, content)
     answer, source_ids = result.get("answer"), result.get("source_ids")
     if not isinstance(answer, str) or not answer or not isinstance(source_ids, list) or not all(
         isinstance(source_id, str) for source_id in source_ids
     ):
-        raise HTTPException(status_code=502, detail="The model returned an invalid answer format")
-    return answer, source_ids
+        raise GenerationOutputError("The model returned an invalid answer format", model, content)
+    return {
+        "model": model,
+        "raw_response": content,
+        "answer": answer,
+        "source_ids": source_ids,
+    }
+
+
+def getLLMResponse(query: str, context) -> tuple[str, list[str]]:
+    response = generate_from_messages(build_generation_messages(query, context))
+    return response["answer"], response["source_ids"]
+
+
+def citation_validation(source_ids: list[str], context) -> tuple[dict[str, Any], dict[str, Any]]:
+    matches = {match.id: match for match in context}
+    invalid_ids = [source_id for source_id in source_ids if source_id not in matches]
+    return {
+        "valid": not invalid_ids,
+        "checked_source_ids": source_ids,
+        "invalid_source_ids": invalid_ids,
+    }, matches
+
+
+def validate_citations(source_ids: list[str], context) -> dict[str, Any]:
+    validation, matches = citation_validation(source_ids, context)
+    if not validation["valid"]:
+        raise HTTPException(status_code=502, detail="The model cited a chunk that was not retrieved")
+    return matches
+
+
+def format_sources(source_ids: list[str], matches: dict[str, Any]) -> list[dict[str, Any]]:
+    return [
+        {
+            "chunk_id": source_id,
+            "case_title": (matches[source_id].metadata or {}).get("title", ""),
+            "case_id": (matches[source_id].metadata or {}).get("doc_id", "").replace("-", "_"),
+            "paragraph_number": (matches[source_id].metadata or {}).get("para"),
+            "text": (matches[source_id].metadata or {}).get("text", ""),
+        }
+        for source_id in source_ids
+    ]

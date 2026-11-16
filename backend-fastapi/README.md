@@ -16,6 +16,11 @@ The `/embedding-simulate` endpoint embeds three sentences using the same NVIDIA
 embedding model and query configuration as retrieval. It returns full vectors
 and cosine similarities without querying or writing to Pinecone.
 
+The `/pipeline-explorer/run` endpoint runs the production query, embedding,
+retrieval, optional reranking, context assembly, generation, and citation
+validation stages without saving chat history. Its response includes each
+stage's inputs, outputs, status, and any execution errors.
+
 After extraction, a Nemotron model assesses text for prompt-injection attempts
 and records a `safe`, `unsafe`, or `check_for_review` flag on the ingestion job.
 Safe documents continue through ingestion; unsafe documents are discarded and
