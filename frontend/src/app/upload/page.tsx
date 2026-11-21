@@ -10,13 +10,15 @@ type IngestResponse = {
     document_id: string;
     task_id: string;
     status: "QUEUED";
+    safety_check: boolean;
   }[];
 };
 
 type IngestionStatus = {
   document_id: string;
   task_id: string;
-  status: "QUEUED" | "EXTRACTING_TEXT" | "CHUNKING" | "EMBEDDING_AND_UPSERTING" | "COMPLETED" | "FAILED";
+  status: "QUEUED" | "EXTRACTING_TEXT" | "CHUNKING" | "EMBEDDING_AND_UPSERTING" | "COMPLETED" | "DISCARDED" | "QUARANTINED" | "FAILED";
+  safety_check: boolean;
   chunk_count: number | null;
   attempt_count: number;
   error: string | null;
@@ -35,6 +37,7 @@ export default function UploadPage() {
   const fileInput = useRef<HTMLInputElement>(null);
   const [files, setFiles] = useState<File[]>([]);
   const [roles, setRoles] = useState<Role[]>(["student"]);
+  const [safetyCheck, setSafetyCheck] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState(false);
@@ -58,6 +61,7 @@ export default function UploadPage() {
     const formData = new FormData();
     files.forEach((file) => formData.append("files", file));
     roles.forEach((role) => formData.append("roles", role));
+    formData.append("safety_check", String(safetyCheck));
     setBusy(true);
     try {
       const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://127.0.0.1:8000";
@@ -138,6 +142,17 @@ export default function UploadPage() {
                 </label>
               ))}
             </fieldset>
+            <label className="safety-toggle">
+              <input
+                type="checkbox"
+                checked={safetyCheck}
+                onChange={(event) => setSafetyCheck(event.target.checked)}
+              />
+              <span>
+                <strong>Screen for prompt injection</strong>
+                <small>Optional check before indexing</small>
+              </span>
+            </label>
             <button
               className="upload-button"
               type="submit"

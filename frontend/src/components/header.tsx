@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 
 type HeaderProps = {
-  active: "chat" | "upload" | "research" | "pipeline" | "chunking" | "embeddings";
+  active: "chat" | "upload" | "library" | "research" | "pipeline" | "chunking" | "embeddings";
   onNewChat?: () => void;
   chatBusy?: boolean;
 };
@@ -14,6 +14,7 @@ export default function Header({ active, onNewChat, chatBusy }: HeaderProps) {
   const links: { id: HeaderProps["active"]; href: string; label: string }[] = [
     { id: "chat", href: "/chat", label: "Chat" },
     { id: "upload", href: "/upload", label: "Upload PDF" },
+    { id: "library", href: "/documents", label: "Document library" },
     { id: "research", href: "/research", label: "Research Lab" },
     { id: "pipeline", href: "/pipeline", label: "Pipeline Explorer" },
     { id: "chunking", href: "/chunking", label: "Chunking Visualizer" },

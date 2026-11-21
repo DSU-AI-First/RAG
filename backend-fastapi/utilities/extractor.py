@@ -64,3 +64,17 @@ def extractor(pdf_content: bytes) -> str:
             pages.append(content)
 
     return "\n\n".join(pages)
+
+
+def simple_extractor(pdf_content: bytes) -> str:
+    if not pdf_content.startswith(b"%PDF-"):
+        raise ValueError("Uploaded file is not a PDF")
+
+    with pymupdf.open(stream=pdf_content, filetype="pdf") as document:
+        pages = [page.get_text().strip() for page in document]
+
+    text = "\n\n".join(page for page in pages if page)
+    if not text:
+        raise ValueError("PDF contains no selectable text")
+
+    return text

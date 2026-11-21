@@ -5,7 +5,7 @@ from database.mongodb import get_collection
 from utilities.chunker import chunker
 from utilities.document_safety import assess_document_safety
 from utilities.embed_upsert import embed_and_upsert
-from utilities.extractor import extractor
+from utilities.extractor import simple_extractor
 
 
 @celery_app.task(bind=True, name="tasks.process_pdf_ingestion", max_retries=3)
@@ -34,22 +34,21 @@ def process_pdf_ingestion(self, document_id: str):
             )
 
         set_status("EXTRACTING_TEXT")
-        markdown = extractor(bytes(document["pdf"]))
-        safety_assessment = job.get("safety_assessment")
-        if safety_assessment is None:
+        markdown = simple_extractor(bytes(document["pdf"]))
+        if job["safety_check"]:
             safety_assessment = assess_document_safety(markdown)
             set_status("EXTRACTING_TEXT", safety_assessment=safety_assessment)
 
-        flag = safety_assessment.get("flag")
-        if flag == "unsafe":
-            set_status("DISCARDED", safety_assessment=safety_assessment)
-            pdfs.delete_one({"_id": document_id})
-            return
-        if flag == "check_for_review":
-            set_status("QUARANTINED", safety_assessment=safety_assessment)
-            return
-        if flag != "safe":
-            raise ValueError("Document safety screening returned an unknown flag")
+            flag = safety_assessment.get("flag")
+            if flag == "unsafe":
+                set_status("DISCARDED", safety_assessment=safety_assessment)
+                pdfs.delete_one({"_id": document_id})
+                return
+            if flag == "check_for_review":
+                set_status("QUARANTINED", safety_assessment=safety_assessment)
+                return
+            if flag != "safe":
+                raise ValueError("Document safety screening returned an unknown flag")
 
         set_status("CHUNKING")
         chunks = chunker(markdown, document["filename"])

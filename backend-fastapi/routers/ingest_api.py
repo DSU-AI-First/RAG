@@ -1,7 +1,7 @@
 from typing import Any
 from uuid import uuid4
 
-from fastapi import APIRouter, File, Form, Header, HTTPException, Response, UploadFile, status
+from fastapi import APIRouter, File, Form, Header, HTTPException, Query, Response, UploadFile, status
 
 from celery_app import celery_app
 from database.mongodb import get_collection
@@ -11,8 +11,68 @@ from utilities.judgement_store import MAX_PDF_SIZE
 router = APIRouter(tags=["ingest"])
 
 
+@router.get("/documents")
+def list_documents(role: ChatRole = Header(alias="X-User-Role")):
+    document_query: dict[str, Any] = {}
+    if role != "default":
+        document_query["roles"] = {"$in": [role]}
+
+    documents = list(
+        get_collection().find(
+            document_query,
+            {"_id": 1, "filename": 1, "roles": 1, "uploaded_at": 1},
+        ).sort("uploaded_at", -1)
+    )
+    if not documents:
+        return {"documents": []}
+
+    jobs = get_collection("ingestion_jobs").find(
+        {"_id": {"$in": [document["_id"] for document in documents]}},
+        {"_id": 1, "status": 1, "chunk_count": 1},
+    )
+    jobs_by_document = {job["_id"]: job for job in jobs}
+
+    return {
+        "documents": [
+            {
+                "document_id": document["_id"],
+                "filename": document.get("filename", "Untitled PDF"),
+                "roles": document.get("roles", []),
+                "uploaded_at": document.get("uploaded_at"),
+                "status": jobs_by_document.get(document["_id"], {}).get("status", "UNKNOWN"),
+                "chunk_count": jobs_by_document.get(document["_id"], {}).get("chunk_count"),
+            }
+            for document in documents
+        ]
+    }
+
+
+@router.get("/documents/{document_id}/pdf")
+def document_pdf(document_id: str, role: ChatRole = Query(default="default")):
+    document_query: dict[str, Any] = {"_id": document_id}
+    if role != "default":
+        document_query["roles"] = {"$in": [role]}
+
+    document = get_collection().find_one(document_query, {"pdf": 1})
+    if document is None or document.get("pdf") is None:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    return Response(
+        content=bytes(document["pdf"]),
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": "inline",
+            "Cache-Control": "private, no-store",
+        },
+    )
+
+
 @router.post("/ingest", status_code=status.HTTP_202_ACCEPTED)
-def ingest(files: list[UploadFile] = File(...), roles: list[Role] = Form(...)):
+def ingest(
+    files: list[UploadFile] = File(...),
+    roles: list[Role] = Form(...),
+    safety_check: bool = Form(False),
+):
     uploads = []
     for file in files:
         pdf_content = file.file.read(MAX_PDF_SIZE + 1)
@@ -37,7 +97,11 @@ def ingest(files: list[UploadFile] = File(...), roles: list[Role] = Form(...)):
             filename=filename,
             roles=roles,
         )
-        job = IngestionJob(document_id=document_id, task_id=task_id)
+        job = IngestionJob(
+            document_id=document_id,
+            task_id=task_id,
+            safety_check=safety_check,
+        )
 
         pdfs.insert_one(pdf.model_dump(by_alias=True))
         try:
@@ -58,7 +122,12 @@ def ingest(files: list[UploadFile] = File(...), roles: list[Role] = Form(...)):
                 {"$set": {"status": "FAILED", "error": str(error)}},
             )
             raise HTTPException(status_code=503, detail="Could not queue PDF ingestion") from error
-        accepted.append({"document_id": document_id, "task_id": task_id, "status": job.status})
+        accepted.append({
+            "document_id": document_id,
+            "task_id": task_id,
+            "status": job.status,
+            "safety_check": job.safety_check,
+        })
 
     return {"jobs": accepted}
 
@@ -74,6 +143,7 @@ def ingestion_status(document_id: str):
             "chunk_count": 1,
             "attempt_count": 1,
             "error": 1,
+            "safety_check": 1,
             "safety_assessment": 1,
         },
     )

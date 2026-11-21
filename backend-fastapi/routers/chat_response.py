@@ -6,7 +6,15 @@ from fastapi import APIRouter, Header, HTTPException
 from openai import OpenAI
 from pinecone import Pinecone
 
-from database.chat_store import chat_exists, new_chatid, save_exchange
+from database.chat_store import (
+    chat_exists,
+    delete_chat,
+    get_messages,
+    list_chats,
+    new_chatid,
+    rename_chat,
+    save_exchange,
+)
 from schemas.ingestion import ChatRole
 from utilities.embed_upsert import INDEX_NAME, embed_query
 from utilities.safety import check_query_safety, check_response_safety
@@ -44,6 +52,7 @@ class GenerationOutputError(HTTPException):
 def chatresponse(
     query: str,
     chatid: str | None = None,
+    safety: bool = False,
     role: ChatRole = Header(alias="X-User-Role"),
 ):
     if chatid is None:
@@ -52,23 +61,47 @@ def chatresponse(
         raise HTTPException(status_code=404, detail="Chat not found")
 
     context = []
-    if check_query_safety(query):
+    if not safety or check_query_safety(query):
         sparse_vector, dense_vector = embed_query(query)
         context = vector_search(sparse_vector, dense_vector, role)
         answer, source_ids = getLLMResponse(query, context)
-        if not check_response_safety(query, answer):
+        if safety and not check_response_safety(query, answer):
             answer, source_ids = SAFETY_REFUSAL, []
     else:
         answer, source_ids = QUERY_REFUSAL, []
 
     matches = validate_citations(source_ids, context)
+    sources = format_sources(source_ids, matches)
 
-    save_exchange(chatid, query, answer)
-    return {
-        "chatid": chatid,
-        "answer": answer,
-        "sources": format_sources(source_ids, matches),
-    }
+    save_exchange(chatid, query, answer, sources)
+    return {"chatid": chatid, "answer": answer, "sources": sources}
+
+
+@router.get("/chats")
+def chats():
+    return {"chats": list_chats()}
+
+
+@router.patch("/chats/{chatid}")
+def rename(chatid: str, title: str):
+    title = title.strip()
+    if not title or not rename_chat(chatid, title[:120]):
+        raise HTTPException(status_code=404, detail="Chat not found")
+    return {"chatid": chatid, "title": title[:120]}
+
+
+@router.delete("/chats/{chatid}")
+def delete(chatid: str):
+    if not delete_chat(chatid):
+        raise HTTPException(status_code=404, detail="Chat not found")
+    return {"deleted": chatid}
+
+
+@router.get("/chats/{chatid}/messages")
+def chat_messages(chatid: str):
+    if not chat_exists(chatid):
+        raise HTTPException(status_code=404, detail="Chat not found")
+    return {"messages": get_messages(chatid)}
 
 
 def vector_search(sparse_vector: dict, dense_vector: list[float], role: ChatRole):

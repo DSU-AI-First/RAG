@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from typing import Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -13,6 +14,7 @@ class PDFDocument(BaseModel):
     pdf: bytes = Field(max_length=15 * 1024 * 1024)
     filename: str
     roles: list[Role] = Field(min_length=1)
+    uploaded_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 class IngestionJob(BaseModel):
@@ -20,6 +22,7 @@ class IngestionJob(BaseModel):
 
     document_id: str = Field(alias="_id")
     task_id: str
+    safety_check: bool = False
     status: Literal[
         "QUEUED",
         "EXTRACTING_TEXT",
